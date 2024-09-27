@@ -1,0 +1,336 @@
+ubuntu@patccc101-c01:~/maz$ cat main
+#!/bin/bash
+ns=pahqds110
+# creating a menu with all the RPDs connected to this DAAS.
+for rpd in `kubectl get rphy -n $ns | awk {'print $4'}`; do
+  echo " $rpd"
+done
+echo "please enter the name of your favorite rpd"
+read rpd
+printf  "\n\n "
+echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+printf  "\n\n "
+echo "scm : ShowCmAll"
+echo "scmr : ShowCmPerf and ShowCmReg"
+echo "rcm : Reset cablemomde by mac address"
+echo "pcm : Ping modem mac layer 2"
+echo "scmc : Show all Channels modem is bonded to"
+echo "sbg : Show bonding groups for each modem"
+echo "spart : Show partial and offline modems only"
+echo "rcmd : Reset all cable modems for this rpd"
+echo "edc : Edit CRD"
+echo "rpart : Reset only Partial Modems"
+echo "smds : Show MacDomain stats and range req and responses"
+echo "scms : Show cm-status response by modems"
+echo "st3 : Show cm-status only T3 and T4 (under construction)"
+echo "cont : Log in to container"
+echo "dbc :. Execute Dynamic Bonding Change"
+echo "addcomm : Add a comment into the logs being kept for today's activity (recommended often)"
+echo "e : Exit from this menu "
+echo "Enter your selection or e for exit]: "
+printf  "\n\n " 
+echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+printf  "\n\n "
+echo ""
+while :
+do
+
+read choice
+
+case $choice in
+  # Mazi Pattern scm
+  scm)  echo ""
+      echo "Selected Show CM All. "
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      echo "$rpd  - $ns - $pg - $(date +"%m-%d-%Y_%H-%M-%S")"
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmAll
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmAll  >> $rpd+_$(date +"%m-%d-%Y").txt
+      ;;
+  # Mazi Pattern scmr
+  scmr)  echo ""
+      echo "ShowCmPerf"
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmAll
+      echo ""
+      echo ""
+      echo "Please enter the mac address of cable modem"
+
+      read cm
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmPerf $cm 1
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmPerf $cm 1 >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "++++++++++++++++++++++++++++++++++++++++++++++++++++"
+      echo "++++++++++++++++++++++++++++++++++++++++++++++++++++"
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmReg $cm 4 
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmReg $cm 4 >> $rpd+_$(date +"%m-%d-%Y").txt
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmReg $cm 4 | grep -ia diplex
+      ;;
+  # Mazi Pattern rcm
+  rcm)  echo "Please enter the mac address of cable modem to reset"
+      read cm
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi CmReset $cm
+      echo "This Cable Modem was reset $cm "  >> $rpd+_$(date +"%m-%d-%Y").txt
+      ;;    
+  # Mazi Pattern pcm
+  pcm)  echo "Please enter the mac address of cable modem to ping"
+      read cm
+      echo "Please enter the number of times to ping pong"
+      read num
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      for i in $num; do
+        i++
+  echo $i
+        kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi DocsisPing $cm
+      done  
+      ;;
+  # Mazi Pattern scma
+  scmc)  echo ""
+      echo "Selected Show CM All Channels. "
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      echo "$rpd  - $ns - $pg - $(date +"%m-%d-%Y_%H-%M-%S")"
+      kubectl exec $pg -c mulpi -n $ns ulc-debug mulpi ShowCmAllChan
+      ;;
+  # Mazi Pattern dbgcm
+  sbg)  echo " displaying bonding groups"
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      for cmmac in `kubectl exec -n $ns $pg -c mulpi ulc-debug mulpi ShowCmAll| grep -o -E '([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}'`; do
+        echo "CM Reg stats for $cmmac ******************************************************" 
+        kubectl exec $pg -c mulpi -n $ns -- ulc-debug mulpi ShowCmReg $cmmac 1| grep -a 'DS BG Name:\|US BG Name:'
+        printf "\n"
+        done
+      ;;
+
+  # Mazi Pattern cmreg
+  spart)  echo " displaying modem registratino status"
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      activepg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      cmcount=`kubectl exec -n$ns $activepg -c mulpi -- ulc-debug mulpi ShowCmAll |grep online -c`
+      partial=`kubectl exec -n$ns $activepg -c mulpi -- ulc-debug mulpi ShowCmAll |grep partial -c`
+      md=`kubectl exec -it -n$ns $activepg -c mulpi -- ulc-debug mulpi ShowLccesTopology | awk {'print $1'}| grep 0x`
+      offline=`kubectl exec -n$ns $activepg -c mulpi -- ulc-debug mulpi ShowCmAll |grep offline -c`
+      kubectl exec -n$ns $activepg -c mulpi -- ulc-debug mulpi ShowCmAll |grep partial
+      kubectl exec -n$ns $activepg -c mulpi -- ulc-debug mulpi ShowCmAll |grep partial >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      kubectl exec -n$ns $activepg -c mulpi -- ulc-debug mulpi ShowCmAll |grep offline
+      kubectl exec -n$ns $activepg -c mulpi -- ulc-debug mulpi ShowCmAll |grep offline >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      echo namespace: $ns rpd: $rpd - active pg: $activepg - CMonline: $cmcount -CMpartial: $partial - CMoffline: $offline -MacDomain $md  
+      echo namespace: $ns rpd: $rpd - active pg: $activepg - CMonline: $cmcount -CMpartial: $partial - CMoffline: $offline  $(date +"%H-%M-%S")  >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      ;;
+    
+  # Mazi Pattern racm
+  rcmd)  echo " Reseting all CM s in macdomain"
+      read -p "Are you sure? " -n 1 -r
+      if [[ $REPLY =~ ^[Yy]$ ]]
+      then
+      # do dangerous stuff
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      md=`kubectl exec -it -n$ns $pg -c mulpi -- ulc-debug mulpi ShowLccesTopology | awk {'print $1'}| grep 0x`
+      echo md = $md
+      kubectl exec -it $pg -cmulpi -n$ns -- ulc-debug mulpi CmResetByMacDomain $md 
+      fi
+      ;;
+ # Mazi Pattern ecrd
+  edc)  echo "Edit CRD"
+      echo "yaml or json?"
+      read out 
+      read -p "Are you sure? " -n 1 -r
+      if [[ $REPLY =~ ^[Yy]$ ]]
+      then
+      # do dangerous stuff
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      #md=`kubectl exec -it -n$ns $pg -c mulpi -- ulc-debug mulpi ShowLccesTopology | awk {'print $1'}| grep 0x`
+      rpdmac=`kubectl get rphy -n$ns | grep $rpd | awk {'print $1'}`
+      #echo md = $md
+      #echo rpdMac = $rpdmac
+      kubectl scale deployment matchmaker -n pahqds110 --replicas=0
+      kubectl get rphy -n$ns $rpdMac -o $out > $rpd+_$(date +"%m-%d-%Y_%H-%M").$out  
+      kubectl edit rphy -n$ns $rpdMac -o $out
+      fi
+      echo " to reconnect matchmaker type :  kubectl scale deployment matchmaker -n $ns --replicas=1"
+      ;;
+
+      # Mazi Pattern rpcm
+  rpart) echo "Resetting All Partial Modems"
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      for i in `kubectl exec $pg -c mulpi -n $ns -- ulc-debug mulpi ShowCmAll|grep partial| grep -o -E '([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}'`;do  kubectl exec $pg -c mulpi -n $ns -- ulc-debug mulpi CmReset $i; done
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      ;;
+
+      # Mazi Pattern RNG
+  smds) echo "Getting your range req and responses per mac domain"
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      md=`kubectl exec -it -n$ns $pg -c mulpi -- ulc-debug mulpi ShowLccesTopology | awk {'print $1'}| grep 0x`
+      kubectl exec -it $pg -cmulpi -n$ns -- ulc-debug mulpi ShowMdStats $md 1
+      kubectl exec -it $pg -cmulpi -n$ns -- ulc-debug mulpi ShowMdStats $md 1 >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      ;;
+ 
+      # Mazi Pattern scms
+  scms) echo "Getting Cable Modem Status Staistics:"
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      md=`kubectl exec -it -n$ns $pg -c mulpi -- ulc-debug mulpi ShowLccesTopology | awk {'print $1'}| grep 0x`
+      kubectl exec -it $pg -cmulpi -n$ns -- ulc-debug mulpi ShowCmStatusStats $md 
+      kubectl exec -it $pg -cmulpi -n$ns -- ulc-debug mulpi ShowCmStatusStats $md  >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      echo """CM-STATUS
+      Event Type Code   Event Condition               Event Trigger
+      0                 Reserved
+      1                 Secondary Channel MDD timeout Lost MDD Timer expiry of a secondary channel advertised as active in the primary channel MDD.
+      2                 QAM/FEC lock failure          Loss of QAM or FEC lock on one of the downstream channels advertised as active in the primary       channel MDD.
+      3                 Sequence out-of-range         Receipt of a packet with an out-of-range sequence number for a particular DSID.
+      4                 Secondary Channel MDD Recovery      Receipt of an MDD on a Secondary channel advertised as active in the most recent primary       channel MDD.
+      5                 QAM/FEC Lock Recovery         Successful QAM/FEC lock on a channel advertised as active in the most recent primary channel MDD.
+      6                 T4 timeout                    Expiration of the T4 timeout on the CM.
+      7                 T3 retries exceeded           The number of T3 retries as specified in Annex B is exceeded.
+      8                 Successful ranging after T3 retries exceeded       Successful ranging on a channel for which T3 retries exceeded event had been       reported.
+      9                 CM operating on battery backup   CM detects loss of A/C Power for more than 5 seconds and the CM is operating on battery backup.
+      10                CM returned to A/C power      CM detects the presence of A/C Power for more than 5 seconds and has returned from backup battery       to operating on A/C power.
+      11                MAC Removal Event             The CM has determined that one or more MAC addresses need to be removed due to a specific CMCI       port transition. (ifOperStatus transitions from 'UP' to 'DOWN')
+      12-15             Reserved for future use
+      16                DS OFDM profile failure       FEC errors were over limit on one of the assigned downstream OFDM profiles of a channel
+      17                Primary Downstream changes    Loss of Primary Downstream followed by successful acquisition of a backup primary downstream       channel as the new primary downstream channel
+      18                DPD Mismatch                  The CM detect the mismatch between the LSB of DPD change count and NCP odd/even bit
+      19                Deprecated
+      20                NCP profile failure           FEC errors were over limit on NCP
+      21                PLC failure                   FEC errors were over limit on PLC
+      22                NCP profile recovery          FEC recovery on NCP profile
+      23                PLC recovery                  FEC recovery on PLC channel
+      24                OFDM profile recovery         FEC recovery on OFDM profile
+      25                OFDMA Profile failure         CM not able to support certain profile because the profile is out of modem capability when it gets       a UCD containing profile definition changes.
+      26                MAP Storage overflow indicator   The MAPs received by the CM contain more information elements than the CM can support.
+      27                MAP Storage almost full indicator   The CM's internal MAP storage capacity is filling up."""
+      ;;
+
+
+ # Mazi Pattern st3t4
+  st3) echo "Getting Cable Modem T3 and T4 Status Staistics:"
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      md=`kubectl exec -it -n$ns $pg -c mulpi -- ulc-debug mulpi ShowLccesTopology | awk {'print $1'}| grep 0x`
+      kubectl exec -it $pg -cmulpi -n$ns -- ulc-debug mulpi ShowCmStatusStats $md | awk -F, '$6 == "6"'
+      kubectl exec -it $pg -cmulpi -n$ns -- ulc-debug mulpi ShowCmStatusStats $md  >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      echo """CM-STATUS
+      Event Type Code   Event Condition               Event Trigger
+      6                 T4 timeout                    Expiration of the T4 timeout on the CM.
+      7                 T3 retries exceeded           The number of T3 retries as specified in Annex B is exceeded."""
+      ;;
+
+      # Mazi Pattern cont
+  cont)  echo ""
+      echo "login to container. "
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      echo "$rpd  - $ns - $pg - $(date +"%m-%d-%Y_%H-%M-%S")"
+      kubectl exec -it $pg -c mulpi -n $ns  bash
+      ;;
+
+      # Mazi Pattern addcomm
+  addcomm) echo "Add a comment to the logs being kept for future reference! good job!"
+      read comment
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      echo ""
+      echo " User Added Comment: $comment" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo "" >> $rpd+_$(date +"%m-%d-%Y").txt
+      echo ""
+      echo ""
+      echo ""
+      ;;
+      # Mazi Pattern dbc
+  dbc)  echo " displaying bonding groups"
+      lcce=`kubectl get workload -n$ns | grep $rpd |  awk '{print $3}'`
+      pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+      for cmmac in `kubectl exec -n $ns $pg -c mulpi ulc-debug mulpi ShowCmAll| grep -o -E '([[:xdigit:]]{1,2}:){5}[[:xdigit:]]{1,2}'`; do
+        echo "CM Reg stats for $cmmac ******************************************************" 
+        kubectl exec $pg -c mulpi -n $ns -- ulc-debug mulpi ShowCmReg $cmmac 1| grep -a 'DS BG Name:\|US BG Name:'
+      done
+      echo " Please enter the Mac Address of Modem"
+      read cm
+      echo " Please enter D/S Bonding Group to change to"
+      read ds
+      echo " Please enter U/S Bonding Group to change to"
+      read us
+      kubectl exec -it -n $ns -cmulpi $pg ulc-debug mulpi ExecuteDbc $cm $ds $us 4
+      kubectl exec $pg -c mulpi -n $ns -- ulc-debug mulpi ShowCmReg $cm 1| grep -a 'DS BG Name:\|US BG Name:'
+      ;;
+
+
+  # Mazi Pattern e
+  e) # echo ""
+     # read -p "Are you done with this tool? " -n 1 -r
+     # if [[ $REPLY =~ ^[Yy]$ ]]
+     # then
+      # do dangerous stuff
+
+      echo ""
+      echo "have a nice day ! ..."
+      echo ""
+      echo ""
+      exit
+     # fi
+      ;;
+  # Default Pattern
+  *) echo "invalid option";;
+ 
+
+
+
+ esac
+  echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+  echo ""
+  echo ""
+  echo "scm : ShowCmAll"
+  echo "scmr : ShowCmPerf and ShowCmReg"
+  echo "rcm : Reset cablemomde by mac address"
+  echo "pcm : Ping modem mac layer 2"
+  echo "scmc : Show all Channels modem is bonded to"
+  echo "sbg : Show bonding groups for each modem"
+  echo "spart : Show partial and offline modems only"
+  echo "rcmd : Reset all cable modems for this rpd"
+  echo "edc : Edit CRD"
+  echo "rpart : Reset only Partial Modems"
+  echo "smds : Show MacDomain stats and range req and responses"
+  echo "scms : Show cm-status response by modems"
+  echo "st3 : Show cm-status only T3 and T4 (under construction)"
+  echo "cont : Log in to container"
+  echo "dbc :. Execute Dynamic Bonding Change"
+  echo "addcomm : Add a comment into the logs being kept for today's activity (recommended often)"
+  echo "e : Exit from this menu "
+  echo "Enter your selection or e for exit]: "
+  printf  "\n"
+  echo ""
+  echo "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+  echo ""
+  echo ""
+done
+
+ubuntu@patccc101-c01:~/maz$ 

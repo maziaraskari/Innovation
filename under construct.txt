@@ -1,0 +1,84 @@
+
+in container:  ip a s
+inet6 fd00:0:113:1::4/64 scope global 
+exit
+kubectl logs pg-1-2 -npahqds110 -c network-agent --timestamps > networkagent.txt
+less networkagent.txt ===>          2024-09-25T22:37:20.576981145Z 2024-09-25 22:37:20,576 DEBUG    [140626171500224] bgpspeaker add_path:57 - Add path [prefix: 2001:558:4073:8:f546:2363:4e50:4f9c/128, next_hop: fd00:0:113:1::4, community: None]
+
+kubectl get pods -npahqds110 -o wide -L=app | grep dispatcher
+kubectl logs vcmts-dispatcher-0 -n pahqds110 --timestamps -c dispatcher > vcmts-dispatcher.txt
+
+
+e4:83:99:1c:f6:1f
+
+
+
+Login to container  kubectl exec -it -npaesds201 pg-1-0 -c mulpi -- bash
+nsg-logctl -h localhost:23059 SetCategoryPriority rangingd.RegSm trace
+nsg-logctl -h 127.0.0.1:23059 SetCategoryPriority rangingd.CmModelRanging.98:9d:5d:85:03:bc trace
+ulc-debug uspp SnoopClearAll
+ulc-debug uspp SnoopCm e4:83:99:1c:f6:1f
+kubectl get pod -npahqds110 pg-1-0 -owide     << exit to master get worker 
+kubectl get nodes -owide | grep -i patcpp113-w05   << get worker ip exit to acm 
+ssh 10.61.25.136
+crictl pods | grep pg-1-0
+crictl ps | grep 8695d417e27c9
+crictl inspect c5fe4233aec4a | grep -i pid
+sudo nsenter -t 1251677 --net tcpdump -nnvi snoop_1 -w /tmp/T3.pcap -C100 -W100 & [1]
+sudo nsenter -t 1251677 --net tcpdump -nnvi snoop_1 -w /tmp/SM_5_8503bc.pcap -C100 -W100 & [1] 204520
+
+ps -aux | grep tcpdump
+sudo kill -9 2981014
+ls /tmp
+
+
+
+ACMv1-patcpp113: 
+scp ubuntu@10.61.25.136:/tmp/T3.pcap00 .
+scp T3.pcap00 mazi@147.191.226.148:/home/mazi/Downloads/T3.pcap00
+
+
+
+ACMv1-patcpp113: 
+scp ubuntu@100.93.106.228:/home/ubuntu/maz/PAHQD90301+_09-24-2024.txt .
+
+
+
+
+
+
+kubectl get pod -npahqds110 pg-1-0 -owide
+kubectl get nodes -owide | grep -i patcpp113-w05
+
+login to container
+nsg-logctl -h localhost:23059 SetCategoryPriority rangingd.RegSm trace
+nsg-logctl -h 127.0.0.1:23059 SetCategoryPriority rangingd.CmModelRanging.98:9d:5d:85:03:bc trace
+ulc-debug uspp SnoopCm 98:9d:5d:85:03:bc
+
+
+
+exit to acm and login to worker:
+ssh 10.61.25.136
+crictl pods | grep pg-1-0
+crictl ps | grep XX
+crictl inspect XX | grep -i pid
+sudo nsenter -t xxPIDxx --net tcpdump -nnvi snoop_1 -w /tmp/my.pcap -C100 -W100 & [1] 204520
+
+
+
+ubuntu@patccc101-c01:~/antony$ cat snoop.sh 
+ns=$1
+rpdName=$2
+cm_mac=$3
+version=$4
+lcce=`kubectl get workload -n$ns | grep $rpdName |  awk '{print $3}'`
+pg=`kubectl get pod -n$ns -llcce-id=$lcce -o json | jq -r .items[].metadata.name`
+kubectl exec $pg -n $ns -c mulpi -- ulc-debug uspp SnoopClearAll 
+kubectl exec $pg -n $ns -c mulpi -- ulc-debug uspp SnoopCm $cm_mac 
+kubectl exec $pg -n $ns -c mulpi -- nohup tcpdump -ne -vv -i snoop_1 -w ${ns}_${rpdName}_${version}.pcap &
+ubuntu@patccc101-c01:~/antony$ 
+
+
+kubectl exec pg-1-0 -n pahqds110 -c mulpi -- ulc-debug uspp SnoopClearAll 
+kubectl exec pg-1-0 -n pahqds110 -c mulpi -- ulc-debug uspp SnoopCm 98:9d:5d:85:03:bc 
+kubectl exec pg-1-0 -n pahqds110 -c mulpi -- nohup tcpdump -ne -vv -i snoop_1 -w pahqds110.pcap &
